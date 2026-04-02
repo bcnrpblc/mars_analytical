@@ -1,13 +1,6 @@
 services:
   librechat:
     image: 'ghcr.io/danny-avila/librechat-dev-api:latest'
-    command: >
-      sh -c "cp /custom-assets/logo.svg /app/client/dist/assets/logo.svg &&
-         cp /custom-assets/favicon-16x16.png /app/client/dist/assets/favicon-16x16.png &&
-         cp /custom-assets/favicon-32x32.png /app/client/dist/assets/favicon-32x32.png &&
-         cp /custom-assets/apple-touch-icon-180x180.png /app/client/dist/assets/apple-touch-icon-180x180.png &&
-         cp /custom-assets/og-preview.png /app/client/dist/assets/og-preview.png &&
-         exec /usr/local/bin/docker-entrypoint.sh"
     environment:
       - SERVICE_URL_LIBRECHAT_3080
       - 'DOMAIN_CLIENT=${SERVICE_URL_LIBRECHAT}'
@@ -42,29 +35,45 @@ services:
       - 'librechat-images:/app/client/public/images'
       - 'librechat-logs:/app/api/logs'
       - 'librechat-uploads:/app/uploads'
-      - type: bind
+      - '/assets/og-preview.png:/app/client/dist/assets/og-preview.png'
+      - ./assets/og-preview.png:/app/client/dist/assets/og-preview.png
+      - ./assets/favicon-32x32.png:/app/client/dist/assets/favicon-32x32.png
+      - ./assets/favicon-16x16.png:/app/client/dist/assets/favicon-16x16.png
+      - ./assets/apple-touch-icon-180x180.png:/app/client/dist/assets/apple-touch-icon-180x180.png
+      - ./assets/logo.svg:/app/client/dist/assets/logo.svg
+    command: >
+      sh -c "sh /custom-assets/patch-index.sh librechat"
+      -
+        type: bind
         source: ./librechat.yaml
         target: /app/librechat.yaml
-      - type: bind
+      -
+        type: bind
         source: ./assets
         target: /custom-assets
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       meilisearch:
-        condition: service_started
+        condition: service_healthy
       vectordb:
-        condition: service_started
+        condition: service_healthy
       rag-api:
-        condition: service_started
+        condition: service_healthy
       mcp-clickhouse-local:
-        condition: service_started
+        condition: service_healthy
       mcp-clickhouse-tpch:
-        condition: service_started
+        condition: service_healthy
       mcp-clickhouse-analytical:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://127.0.0.1:3080/api/health'
       interval: 5s
       timeout: 10s
       retries: 5
@@ -76,7 +85,13 @@ services:
     volumes:
       - 'mongodb-data:/data/db'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - mongosh
+        - '--eval'
+        - "db.runCommand('ping').ok"
+        - '127.0.0.1:27017/test'
+        - '--quiet'
       interval: 5s
       timeout: 10s
       retries: 3
@@ -90,7 +105,11 @@ services:
     volumes:
       - 'meilisearch-data:/meili_data'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://127.0.0.1:7700/health'
       interval: 2s
       timeout: 10s
       retries: 15
@@ -104,7 +123,13 @@ services:
     volumes:
       - 'vectordb-data:/var/lib/postgresql/data'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - pg_isready
+        - '--username=$SERVICE_USER_POSTGRES'
+        - '--host=127.0.0.1'
+        - '--port=5432'
+        - '--dbname=rag'
       interval: 2s
       timeout: 1m
       retries: 5
@@ -123,9 +148,13 @@ services:
       - 'RAG_OPENAI_API_KEY=${SERVICE_OPENAI_API_KEY:-user_provided}'
     depends_on:
       vectordb:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - python
+        - '-c'
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
       interval: 5s
       timeout: 10s
       retries: 10
@@ -142,13 +171,19 @@ services:
       - CLICKHOUSE_MCP_SERVER_TRANSPORT=sse
       - CLICKHOUSE_MCP_BIND_HOST=0.0.0.0
       - CLICKHOUSE_MCP_BIND_PORT=8000
-      - CLICKHOUSE_MCP_AUTH_disable=true
+      - CLICKHOUSE_MCP_AUTH_DISABLED=true
     ports:
       - '8002:8000'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://127.0.0.1:8000/health'
       interval: 10s
       timeout: 5s
       retries: 5
@@ -167,13 +202,19 @@ services:
       - CLICKHOUSE_MCP_SERVER_TRANSPORT=sse
       - CLICKHOUSE_MCP_BIND_HOST=0.0.0.0
       - CLICKHOUSE_MCP_BIND_PORT=8000
-      - CLICKHOUSE_MCP_AUTH_disable=true
+      - CLICKHOUSE_MCP_AUTH_DISABLED=true
     ports:
       - '8003:8000'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://127.0.0.1:8000/health'
       interval: 10s
       timeout: 5s
       retries: 5
@@ -192,13 +233,19 @@ services:
       - CLICKHOUSE_MCP_SERVER_TRANSPORT=sse
       - CLICKHOUSE_MCP_BIND_HOST=0.0.0.0
       - CLICKHOUSE_MCP_BIND_PORT=8000
-      - CLICKHOUSE_MCP_AUTH_disable=true
+      - CLICKHOUSE_MCP_AUTH_DISABLED=true
     ports:
       - '8004:8000'
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     healthcheck:
-      disable: true
+      test:
+        - CMD
+        - wget
+        - '--no-verbose'
+        - '--tries=1'
+        - '--spider'
+        - 'http://127.0.0.1:8000/health'
       interval: 10s
       timeout: 5s
       retries: 5
