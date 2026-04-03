@@ -169,11 +169,16 @@ export default function MemoryPanel() {
 
             {/* Memory Toggle */}
             {hasOptOutAccess && (
-              <Button
-                size="sm"
-                variant="outline"
-                className={`ml-auto ${referenceSavedMemories ? 'bg-surface-hover hover:bg-surface-hover' : ''}`}
-                onClick={() => handleMemoryToggle(!referenceSavedMemories)}
+              <div
+                role="button"
+                tabIndex={0}
+                className={`ml-auto flex items-center gap-2 rounded border border-border px-3 py-1 text-sm cursor-pointer ${referenceSavedMemories ? 'bg-surface-hover hover:bg-surface-hover' : 'hover:bg-surface-secondary'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                onClick={() => !updateMemoryPreferencesMutation.isLoading && handleMemoryToggle(!referenceSavedMemories)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    !updateMemoryPreferencesMutation.isLoading && handleMemoryToggle(!referenceSavedMemories);
+                  }
+                }}
                 aria-label={localize('com_ui_use_memory')}
                 aria-pressed={referenceSavedMemories}
                 disabled={updateMemoryPreferencesMutation.isLoading}
@@ -182,10 +187,11 @@ export default function MemoryPanel() {
                   checked={referenceSavedMemories}
                   tabIndex={-1}
                   aria-hidden="true"
-                  className="pointer-events-none mr-2"
+                  aria-label="use-memory-checkbox"
+                  className="pointer-events-none"
                 />
                 {localize('com_ui_use_memory')}
-              </Button>
+              </div>
             )}
           </div>
         )}

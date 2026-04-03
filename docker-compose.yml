@@ -1,20 +1,13 @@
 services:
   librechat:
     image: 'ghcr.io/danny-avila/librechat-dev-api:latest'
-    command: >
-      sh -c "cp /custom-assets/logo.svg /app/client/dist/assets/logo.svg &&
-         cp /custom-assets/favicon-16x16.png /app/client/dist/assets/favicon-16x16.png &&
-         cp /custom-assets/favicon-32x32.png /app/client/dist/assets/favicon-32x32.png &&
-         cp /custom-assets/apple-touch-icon-180x180.png /app/client/dist/assets/apple-touch-icon-180x180.png &&
-         cp /custom-assets/og-preview.png /app/client/dist/assets/og-preview.png &&
-         exec /usr/local/bin/docker-entrypoint.sh"
     environment:
       - SERVICE_URL_LIBRECHAT_3080
       - 'DOMAIN_CLIENT=${SERVICE_URL_LIBRECHAT}'
       - 'DOMAIN_SERVER=${SERVICE_URL_LIBRECHAT}'
       - HOST=0.0.0.0
       - PORT=3080
-      - 'MONGO_URI=mongodb://${SERVICE_USER_MONGO}:${SERVICE_PASSWORD_MONGO}@mongodb:27017/librechat?authSource=admin'
+      - 'MONGO_URI=mongodb://127.0.0.1:27017/LibreChat'
       - 'MEILI_HOST=http://meilisearch:7700'
       - 'MEILI_MASTER_KEY=${SERVICE_PASSWORD_MEILI}'
       - RAG_PORT=8000
@@ -38,36 +31,38 @@ services:
       - 'DEBUG_OPENAI=${DEBUG_OPENAI:-false}'
       - 'DEBUG_PLUGINS=${DEBUG_OPENAI:-false}'
       - 'NO_INDEX=${NO_INDEX:-true}'
+      - 'LOGIN_MAX=${LOGIN_MAX:-60}'
+      - 'LOGIN_WINDOW=${LOGIN_WINDOW:-15}'
     volumes:
       - 'librechat-images:/app/client/public/images'
       - 'librechat-logs:/app/api/logs'
       - 'librechat-uploads:/app/uploads'
+      - ./assets/logo.svg:/app/client/dist/assets/logo.svg
+      - ./assets/favicon-16x16.png:/app/client/dist/assets/favicon-16x16.png
+      - ./assets/favicon-32x32.png:/app/client/dist/assets/favicon-32x32.png
       - type: bind
         source: ./librechat.yaml
         target: /app/librechat.yaml
       - type: bind
         source: ./assets
         target: /custom-assets
+    ports:
+      - '3080:3080'
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       meilisearch:
-        condition: service_started
+        condition: service_healthy
       vectordb:
-        condition: service_started
+        condition: service_healthy
       rag-api:
         condition: service_started
-      mcp-clickhouse-local:
-        condition: service_started
-      mcp-clickhouse-tpch:
-        condition: service_started
-      mcp-clickhouse-analytical:
-        condition: service_started
     healthcheck:
-      disable: true
+      test: ['CMD', 'curl', '-f', 'http://localhost:3080/api/auth/session']
       interval: 5s
       timeout: 10s
       retries: 5
+      start_period: 30s
   mongodb:
     image: 'mongo:8'
     environment:
@@ -76,10 +71,11 @@ services:
     volumes:
       - 'mongodb-data:/data/db'
     healthcheck:
-      disable: true
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
       interval: 5s
       timeout: 10s
       retries: 3
+      start_period: 10s
   meilisearch:
     image: 'getmeili/meilisearch:v1.12.3'
     environment:
@@ -90,10 +86,11 @@ services:
     volumes:
       - 'meilisearch-data:/meili_data'
     healthcheck:
-      disable: true
+      test: ['CMD', 'curl', '-f', 'http://localhost:7700/health']
       interval: 2s
       timeout: 10s
       retries: 15
+      start_period: 20s
   vectordb:
     image: 'ankane/pgvector:latest'
     environment:
@@ -104,9 +101,9 @@ services:
     volumes:
       - 'vectordb-data:/var/lib/postgresql/data'
     healthcheck:
-      disable: true
+      test: ['CMD-SHELL', 'pg_isready -U ${SERVICE_USER_POSTGRES} -d rag']
       interval: 2s
-      timeout: 1m
+      timeout: 10s
       retries: 5
       start_period: 10s
   rag-api:
@@ -123,13 +120,16 @@ services:
       - 'RAG_OPENAI_API_KEY=${SERVICE_OPENAI_API_KEY:-user_provided}'
     depends_on:
       vectordb:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      disable: true
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
       interval: 5s
       timeout: 10s
       retries: 10
+      start_period: 20s
   mcp-clickhouse-local:
+    profiles:
+      - mcp
     image: 'python:3.11-slim'
     command: "sh -c \" apt-get update && apt-get install -y curl wget && pip install --no-cache-dir uv && uv pip install --system mcp-clickhouse && mcp-clickhouse \"\n"
     environment:
@@ -155,6 +155,8 @@ services:
       start_period: 90s
     restart: unless-stopped
   mcp-clickhouse-tpch:
+    profiles:
+      - mcp
     image: 'python:3.11-slim'
     command: "sh -c \" apt-get update && apt-get install -y curl wget && pip install --no-cache-dir uv && uv pip install --system mcp-clickhouse && mcp-clickhouse \"\n"
     environment:
@@ -180,6 +182,8 @@ services:
       start_period: 90s
     restart: unless-stopped
   mcp-clickhouse-analytical:
+    profiles:
+      - mcp
     image: 'python:3.11-slim'
     command: "sh -c \" apt-get update && apt-get install -y curl wget && pip install --no-cache-dir uv && uv pip install --system mcp-clickhouse && mcp-clickhouse \"\n"
     environment:

@@ -1,0 +1,74 @@
+# Multi-stage build for LibreChat production deployment
+# Optimized for Hostinger
+
+# ============================================================================
+# Stage 1: Build Stage
+# ============================================================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev pixman-dev
+
+# Copy package files
+COPY package*.json ./
+COPY packages ./packages
+COPY api ./api
+COPY client ./client
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps
+
+# Build all packages with Turbo
+RUN npm run build
+
+# ============================================================================
+# Stage 2: Runtime Stage
+# ============================================================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    curl \
+    bash \
+    dumb-init \
+    cairo \
+    jpeg \
+    pango \
+    giflib \
+    pixman
+
+# Copy built application from builder stage
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/api ./api
+COPY --from=builder /app/client ./client
+COPY --from=builder /app/package*.json ./
+
+# Copy config and assets
+COPY librechat.yaml ./
+COPY .env.example ./.env.example
+COPY assets ./assets
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+# Set permissions
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3080/api/auth/session || exit 1
+
+# Expose port
+EXPOSE 3080
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+
+# Start application
+CMD ["npm", "run", "start"]
