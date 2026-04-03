@@ -48,10 +48,10 @@ COPY --from=builder /app/api ./api
 COPY --from=builder /app/client ./client
 COPY --from=builder /app/package*.json ./
 
-# Copy config and assets
-COPY librechat.yaml ./
-COPY .env.example ./.env.example
-COPY assets ./assets
+# Copy config and assets (optional - will be provided at runtime)
+# Note: librechat.yaml and assets should be mounted as volumes or provided at runtime
+# COPY librechat.yaml ./  (optional)
+# COPY assets ./assets    (optional)
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
