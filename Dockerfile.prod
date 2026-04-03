@@ -14,7 +14,6 @@ RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev 
 # Copy configuration files
 COPY package*.json ./
 COPY turbo.json ./
-COPY tsconfig.json ./
 
 # Copy source directories
 COPY packages ./packages
