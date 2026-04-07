@@ -47,6 +47,13 @@ RUN \
     npm prune --production; \
     npm cache clean --force
 
+    # Copy branding assets
+RUN cp /app/assets/logo.svg /app/client/dist/assets/logo.svg && \
+    cp /app/assets/favicon-16x16.png /app/client/dist/assets/favicon-16x16.png && \
+    cp /app/assets/favicon-32x32.png /app/client/dist/assets/favicon-32x32.png && \
+    cp /app/assets/apple-touch-icon-180x180.png /app/client/dist/assets/apple-touch-icon-180x180.png && \
+    cp /app/assets/og-preview.png /app/client/dist/assets/og-preview.png
+
 # Node API setup
 EXPOSE 3080
 ENV HOST=0.0.0.0
